@@ -1,11 +1,15 @@
+
 {
-  "name": "gerador-audio-backend",
+  "name": "gerador-audio-ia-backend",
   "version": "1.0.0",
   "description": "Servidor para o Gerador de Áudio com IA",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js"
+  },
+  "engines": {
+    "node": "18.x"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
