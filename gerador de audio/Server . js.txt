@@ -1,0 +1,100 @@
+// --- 1. IMPORTAÇÕES ---
+import express from 'express';
+import fetch from 'node-fetch';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// --- 2. CONFIGURAÇÃO INICIAL ---
+dotenv.config();
+const app = express();
+app.use(express.json({ limit: '10mb' })); // Permite JSON e aumenta o limite para imagens
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PORT = process.env.PORT || 3000;
+
+// --- 3. ROTAS DA API ---
+
+// Rota para Geração de Roteiro (Texto ou Imagem)
+app.post("/api/generate-script", async (req, res) => {
+    try {
+        const { contents } = req.body;
+        if (!contents) {
+            return res.status(400).json({ error: "Conteúdo para geração não fornecido." });
+        }
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `Erro na API Gemini: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (!text) {
+             return res.status(500).json({ error: "A IA não retornou um roteiro." });
+        }
+
+        res.json({ script: text });
+
+    } catch (err) {
+        console.error("Erro em /api/generate-script:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Rota para Geração de Áudio (TTS)
+app.post("/api/generate-audio", async (req, res) => {
+    try {
+        const { contents, generationConfig } = req.body;
+        if (!contents || !generationConfig) {
+             return res.status(400).json({ error: "Payload incompleto para geração de áudio." });
+        }
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents, generationConfig }),
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `Erro na API TTS Gemini: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const part = data?.candidates?.[0]?.content?.parts?.[0];
+        
+        if (!part || !part.inlineData || !part.inlineData.data) {
+            return res.status(500).json({ error: "API não retornou dados de áudio válidos." });
+        }
+        
+        res.json({ audioData: part.inlineData.data, mimeType: part.inlineData.mimeType });
+
+    } catch (err) {
+        console.error("Erro em /api/generate-audio:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// --- 4. SERVIR O FRONTEND ---
+const frontendPath = path.join(__dirname, 'frontend');
+app.use(express.static(frontendPath));
+
+app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
+// --- 5. INICIAR O SERVIDOR ---
+app.listen(PORT, () => {
+    console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
+});
+

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Áudio com IA (Versão Profissional)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        .step-card { background: white; padding: 1.25rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-left: 4px solid transparent; transition: all 0.3s ease; margin-bottom: 1.25rem; }
+        .step-card.active { border-left-color: #4f46e5; transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .step-title { font-size: 1.25rem; font-weight: 600; color: #1f2937; margin-bottom: 1rem; display: flex; align-items: center; }
+        .step-title span { background: #4f46e5; color: white; border-radius: 9999px; width: 1.75rem; height: 1.75rem; font-size: 1rem; display: inline-flex; align-items: center; justify-content: center; margin-right: 0.75rem; }
+        .label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem; }
+        .input-select, .input-text, .textarea { width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.5rem; transition: box-shadow 0.2s; }
+        .input-select:focus, .input-text:focus, .textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3); border-color: #6366f1; }
+        .btn { display: inline-flex; justify-content: center; align-items: center; font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: all 0.2s; cursor: pointer; border: none; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-primary { width: 100%; background: #4f46e5; color: white; }
+        .btn-primary:hover:not(:disabled) { background: #4338ca; }
+        .btn-secondary { background: #e5e7eb; padding: 0.5rem 0.75rem; }
+        .btn-action { flex: 1; background-color: #f3f4f6; color: #374151; }
+        .btn-generate { width: 100%; background: #2563eb; color: white; font-size: 1.125rem; }
+        .btn-download { width: 100%; background: #059669; color: white; font-size: 1.125rem;}
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; }
+        .loader-sm { border: 3px solid rgba(0,0,0,0.1); width: 20px; height: 20px; animation: spin 0.8s linear infinite; }
+        .loader-preview { border-top-color: #4f46e5; }
+        .loader-white { border-top-color: #ffffff; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-2xl shadow-lg w-full max-w-2xl p-8 space-y-6">
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-gray-800">Gerador de Áudio com IA</h1>
+            <p class="text-gray-500 mt-2">Crie narrações profissionais com trilha sonora.</p>
+        </div>
+
+        <div class="step-card">
+            <h2 class="step-title"><span>1</span>Crie o roteiro</h2>
+            <label for="script-topic" class="label">Digite um tema ou envie uma imagem:</label>
+            <input type="text" id="script-topic" placeholder="Ex: Tênis de corrida veloz" class="input-text mb-2">
+            <input type="file" id="image-upload" class="hidden" accept="image/png, image/jpeg">
+            <label for="image-upload" class="btn btn-secondary w-full mb-4">Enviar Imagem</label>
+            <button id="generate-script-btn" class="btn btn-primary w-full">✨ Gerar Roteiro</button>
+            <textarea id="script-text" rows="5" class="textarea mt-4" placeholder="... ou digite seu texto aqui."></textarea>
+        </div>
+
+        <div class="step-card">
+            <h2 class="step-title"><span>2</span>Defina o estilo da voz</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="voice-select" class="label">Voz:</label>
+                    <select id="voice-select" class="input-select"></select>
+                </div>
+                <div>
+                    <label for="voice-tone" class="label">Tom:</label>
+                    <select id="voice-tone" class="input-select">
+                        <option value="empolgado">Empolgado</option>
+                        <option value="profissional">Profissional</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card">
+            <h2 class="step-title"><span>3</span>Adicionar Trilha Sonora</h2>
+            <div class="space-y-4">
+                <select id="music-style-select" class="input-select">
+                    <option value="none">Nenhuma</option>
+                    <option value="inspiradora">Inspiradora</option>
+                </select>
+                <label for="music-volume-slider" class="label">Volume: <span id="music-volume-label">-20</span> dB</label>
+                <input type="range" id="music-volume-slider" min="-40" max="0" value="-20" class="w-full">
+                <div class="flex items-center">
+                    <input type="checkbox" id="mix-audio-checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="mix-audio-checkbox" class="ml-2 block text-sm text-gray-900">Incluir música no download</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <button id="generate-btn" class="btn btn-generate w-full">Gerar Áudio</button>
+            <div id="status-container" class="text-center">
+                <div id="loader" class="loader mx-auto hidden"></div>
+                <audio id="audio-player" controls class="w-full hidden"></audio>
+                <p id="error-message" class="text-red-500 mt-2"></p>
+                <button id="download-btn" class="btn btn-download w-full mt-2 hidden">Baixar Áudio</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const el = {
+        generateScriptBtn: document.getElementById('generate-script-btn'),
+        scriptText: document.getElementById('script-text'),
+        scriptTopic: document.getElementById('script-topic'),
+        imageUpload: document.getElementById('image-upload'),
+        generateBtn: document.getElementById('generate-btn'),
+        downloadBtn: document.getElementById('download-btn'),
+        audioPlayer: document.getElementById('audio-player'),
+        loader: document.getElementById('loader'),
+        errorMessage: document.getElementById('error-message'),
+        voiceSelect: document.getElementById('voice-select'),
+        voiceTone: document.getElementById('voice-tone'),
+        musicStyleSelect: document.getElementById('music-style-select'),
+        musicVolumeSlider: document.getElementById('music-volume-slider'),
+        musicVolumeLabel: document.getElementById('music-volume-label'),
+        mixAudioCheckbox: document.getElementById('mix-audio-checkbox'),
+    };
+
+    const VOICES = { "Vozes": [{ id: "Kore", label: "Voz 1 (Firme)" }, { id: "Puck", label: "Voz 2 (Animada)" }] };
+    Object.values(VOICES).flat().forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v.id;
+        opt.textContent = v.label;
+        el.voiceSelect.appendChild(opt);
+    });
+
+    let generatedAudioBlob = null;
+    let uploadedImageData = null;
+
+    function showError(msg) { el.errorMessage.textContent = msg || ''; }
+
+    async function apiCall(endpoint, body) {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Erro desconhecido no servidor.');
+        }
+        return response.json();
+    }
+    
+    // Converte Base64 para um ArrayBuffer
+    function base64ToArrayBuffer(base64) {
+        const binaryString = window.atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    el.generateScriptBtn.addEventListener('click', async () => {
+        showError();
+        let contents = [];
+        if (uploadedImageData) {
+            contents.push({ text: "Crie um roteiro de anúncio para esta imagem." });
+            contents.push({ inlineData: { mimeType: uploadedImageData.type, data: uploadedImageData.data } });
+        } else {
+            const topic = el.scriptTopic.value.trim();
+            if (!topic) return showError("Por favor, digite um tema.");
+            contents.push({ text: `Crie um roteiro de anúncio sobre: ${topic}` });
+        }
+        try {
+            const data = await apiCall('/api/generate-script', { contents });
+            el.scriptText.value = data.script;
+        } catch (err) {
+            showError(err.message);
+        }
+    });
+
+    el.generateBtn.addEventListener('click', async () => {
+        const script = el.scriptText.value.trim();
+        if (!script) return showError("Por favor, gere ou digite um roteiro.");
+        
+        el.loader.classList.remove('hidden');
+        showError();
+        el.audioPlayer.classList.add('hidden');
+        el.downloadBtn.classList.add('hidden');
+
+        try {
+            const prompt = `Narre o seguinte texto com um tom ${el.voiceTone.value}: "${script}"`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: el.voiceSelect.value } } }
+                }
+            };
+
+            const data = await apiCall('/api/generate-audio', payload);
+            
+            const audioBuffer = base64ToArrayBuffer(data.audioData);
+            generatedAudioBlob = new Blob([audioBuffer], { type: data.mimeType });
+            
+            el.audioPlayer.src = URL.createObjectURL(generatedAudioBlob);
+            el.audioPlayer.classList.remove('hidden');
+            el.downloadBtn.classList.remove('hidden');
+        } catch (err) {
+            showError(err.message);
+        } finally {
+            el.loader.classList.add('hidden');
+        }
+    });
+    
+    el.downloadBtn.addEventListener('click', () => {
+         if (!generatedAudioBlob) return;
+         const a = document.createElement("a");
+         a.href = URL.createObjectURL(generatedAudioBlob);
+         a.download = `narracao_${Date.now()}.mp3`; 
+         document.body.appendChild(a);
+         a.click();
+         document.body.removeChild(a);
+    });
+
+    el.imageUpload.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64 = reader.result.split(',')[1];
+            uploadedImageData = { data: base64, type: file.type };
+        };
+        reader.readAsDataURL(file);
+    });
+
+    el.musicVolumeSlider.addEventListener('input', (e) => {
+        el.musicVolumeLabel.textContent = e.target.value;
+    });
+});
+</script>
+</body>
+</html>
+
